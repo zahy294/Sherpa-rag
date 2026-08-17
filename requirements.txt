@@ -1,6 +1,6 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
-datasets
+streamlit
 lancedb
 fastembed
 groq
@@ -12,3 +12,6 @@ numpy
 torch
 transformers
 bm25s
+optimum[onnxruntime]
+onnxruntime
+datasets
