@@ -1,0 +1,29 @@
+# Environment & Secrets
+.env
+*.env
+
+# Virtual Environment & Python Caches
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Heavy Data Artifacts & Zips (Hosted externally via GitHub Releases)
+data.zip
+lancedb_data/
+prompt_guard_onnx/
+bm25_index.pkl
+*.pkl
+
+# Generated Output & Benchmarks
+benchmark_results/
+*.mp3
+*.wav
+
+# IDE & OS Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
