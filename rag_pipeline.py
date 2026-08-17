@@ -1,5 +1,7 @@
 import os
 import time
+import urllib.request
+import zipfile
 import lancedb
 import numpy as np
 from dotenv import load_dotenv
@@ -9,11 +11,41 @@ from groq import Groq
 from rrf import reciprocal_rank_fusion
 from sparse_index import bm25_search, load_bm25_index
 
+# 0. Download & extract pre-built index data from GitHub Releases if missing
+DATA_URL = "https://github.com/zahy294/Sherpa-rag/releases/download/v1.0.0/data.zip"
+
+
+def setup_data():
+    if (
+        not os.path.exists("lancedb_data")
+        or not os.path.exists("bm25_index.pkl")
+        or not os.path.exists("prompt_guard_onnx")
+    ):
+        print("Downloading pre-indexed data from GitHub Releases...")
+
+        # User-Agent header prevents 403 Forbidden errors from GitHub
+        req = urllib.request.Request(DATA_URL, headers={"User-Agent": "Mozilla/5.0"})
+
+        with urllib.request.urlopen(req) as response, open(
+            "data.zip", "wb"
+        ) as out_file:
+            out_file.write(response.read())
+
+        print("Extracting indices...")
+        with zipfile.ZipFile("data.zip", "r") as zip_ref:
+            zip_ref.extractall(".")
+
+        os.remove("data.zip")
+        print("Data setup complete!")
+
+
+setup_data()
+
 # 1. Load environment variables
 load_dotenv()
 
 if not os.getenv("GROQ_API_KEY"):
-    raise ValueError("GROQ_API_KEY is missing from your .env file!")
+    raise ValueError("GROQ_API_KEY is missing from your environment/secrets!")
 
 # 2. Configuration
 LANCEDB_PATH = "./lancedb_data"
@@ -48,8 +80,7 @@ def retrieve_context(
     t0 = time.perf_counter()
     query_vector = np.asarray(list(embedder.embed([query]))[0], dtype=np.float32)
 
-    # Dense search — widen the candidate pool beyond top_k so fusion has
-    # real material to combine, not just the final answer set twice
+    # Dense search — widen candidate pool beyond top_k for fusion
     dense_hits = table.search(query_vector).limit(top_k * 4).to_list()
     dense_results = []
     for hit in dense_hits:
@@ -63,7 +94,7 @@ def retrieve_context(
     # Sparse search
     sparse_results = bm25_search(_bm25_indices, query, top_k=top_k * 4)
 
-    # Fuse by rank (RRF) — not by raw score
+    # Fuse by rank (RRF)
     fused = reciprocal_rank_fusion(dense_results, sparse_results, top_k=top_k)
 
     # Preserve raw dense cosine score on fused hits where available
