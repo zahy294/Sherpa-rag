@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+datasets
+lancedb
+fastembed
+groq
+pydantic
+python-dotenv
+requests
+httpx
+numpy
+torch
+transformers
+bm25s
