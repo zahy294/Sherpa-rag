@@ -3,8 +3,12 @@ import time
 
 import streamlit as st
 
+# MUST run setup_data before importing guardrails or voice_rag modules that load local files
+from rag_pipeline import retrieve_context, setup_data
+
+setup_data()
+
 from guardrails import generate_general_knowledge_response, run_two_tier_rag
-from rag_pipeline import retrieve_context
 from voice_rag import run_full_voice_rag, text_to_speech
 
 # --- Page Configuration ---

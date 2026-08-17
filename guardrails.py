@@ -32,27 +32,38 @@ logger = logging.getLogger("guardrails")
 
 LOCAL_PROMPT_GUARD_MODEL = "./prompt_guard_onnx"
 
-logger.info(
-    f"Loading ONNX Prompt Guard model from {LOCAL_PROMPT_GUARD_MODEL} ..."
-)
-_guard_tokenizer = AutoTokenizer.from_pretrained(
-    LOCAL_PROMPT_GUARD_MODEL, fix_mistral_regex=True
-)
+_guard_tokenizer = None
+_guard_model = None
 
-# Cap session threads so ONNX Runtime doesn't contend with FastEmbed's pool
-_ort_session_options = SessionOptions()
-_ort_session_options.intra_op_num_threads = 1
-_ort_session_options.inter_op_num_threads = 1
 
-_guard_model = ORTModelForSequenceClassification.from_pretrained(
-    LOCAL_PROMPT_GUARD_MODEL,
-    session_options=_ort_session_options,
-)
-logger.info("ONNX Prompt Guard model loaded.")
+def _get_guard_model():
+    """Lazily loads and warms up the local Prompt Guard ONNX model on first use."""
+    global _guard_tokenizer, _guard_model
+    if _guard_tokenizer is None or _guard_model is None:
+        logger.info(
+            f"Loading ONNX Prompt Guard model from {LOCAL_PROMPT_GUARD_MODEL} ..."
+        )
+        _guard_tokenizer = AutoTokenizer.from_pretrained(
+            LOCAL_PROMPT_GUARD_MODEL, fix_mistral_regex=True
+        )
 
-_warmup_inputs = _guard_tokenizer("warmup", return_tensors="pt")
-_guard_model(**_warmup_inputs)
-logger.info("Prompt Guard model warmed up.")
+        # Cap session threads so ONNX Runtime doesn't contend with FastEmbed's pool
+        _ort_session_options = SessionOptions()
+        _ort_session_options.intra_op_num_threads = 1
+        _ort_session_options.inter_op_num_threads = 1
+
+        _guard_model = ORTModelForSequenceClassification.from_pretrained(
+            LOCAL_PROMPT_GUARD_MODEL,
+            session_options=_ort_session_options,
+        )
+        logger.info("ONNX Prompt Guard model loaded.")
+
+        _warmup_inputs = _guard_tokenizer("warmup", return_tensors="pt")
+        _guard_model(**_warmup_inputs)
+        logger.info("Prompt Guard model warmed up.")
+
+    return _guard_tokenizer, _guard_model
+
 
 # Shared executor for concurrent prompt guard pre-checks and vector retrieval
 _executor = ThreadPoolExecutor(max_workers=2)
@@ -150,10 +161,11 @@ def check_unsafe_input(query: str) -> tuple[bool, float, float]:
     """
     t0 = time.perf_counter()
     try:
-        inputs = _guard_tokenizer(
+        guard_tokenizer, guard_model = _get_guard_model()
+        inputs = guard_tokenizer(
             query, return_tensors="pt", truncation=True, max_length=512
         )
-        logits = _guard_model(**inputs).logits
+        logits = guard_model(**inputs).logits
         # Label 1 = malicious/jailbreak in Prompt Guard 2's binary classification head
         probs = torch.softmax(logits, dim=-1)
         score = probs[0][1].item()
