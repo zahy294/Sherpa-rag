@@ -23,20 +23,33 @@ def setup_data():
     ):
         print("Downloading pre-indexed data from GitHub Releases...")
 
-        # User-Agent header prevents 403 Forbidden errors from GitHub
         req = urllib.request.Request(DATA_URL, headers={"User-Agent": "Mozilla/5.0"})
 
-        with urllib.request.urlopen(req) as response, open(
-            "data.zip", "wb"
-        ) as out_file:
+        with urllib.request.urlopen(req) as response, open("data.zip", "wb") as out_file:
             out_file.write(response.read())
+
+        downloaded_size = os.path.getsize("data.zip")
+        print(f"Downloaded data.zip: {downloaded_size / (1024*1024):.1f} MB")
 
         print("Extracting indices...")
         with zipfile.ZipFile("data.zip", "r") as zip_ref:
+            names = zip_ref.namelist()
+            print(f"Zip contains {len(names)} entries. First 10: {names[:10]}")
             zip_ref.extractall(".")
 
         os.remove("data.zip")
         print("Data setup complete!")
+
+    # ALWAYS run this check, whether or not the download branch fired,
+    # so we see the real on-disk state either way
+    print(f"lancedb_data exists: {os.path.exists('lancedb_data')}")
+    if os.path.exists("lancedb_data"):
+        print(f"lancedb_data contents: {os.listdir('lancedb_data')}")
+    print(f"bm25_index.pkl exists: {os.path.exists('bm25_index.pkl')}, "
+          f"size: {os.path.getsize('bm25_index.pkl') if os.path.exists('bm25_index.pkl') else 'N/A'}")
+    print(f"prompt_guard_onnx exists: {os.path.exists('prompt_guard_onnx')}")
+    if os.path.exists("prompt_guard_onnx"):
+        print(f"prompt_guard_onnx contents: {os.listdir('prompt_guard_onnx')}")
 
 
 setup_data()
